@@ -1,4 +1,5 @@
-#![cfg_attr(feature = "cargo-clippy", allow(unused_io_amount))]
+#![deny(rust_2018_idioms)]
+#![allow(clippy::upper_case_acronyms)]
 
 #[macro_use]
 extern crate error_chain;
@@ -11,31 +12,7 @@ extern crate log;
 #[macro_use]
 extern crate serde_derive;
 
-extern crate aes;
-extern crate base64;
-extern crate byteorder;
-extern crate bytes;
-extern crate hmac;
-extern crate httparse;
-extern crate hyper;
-extern crate hyper_proxy;
-extern crate num_bigint;
-extern crate num_integer;
-extern crate num_traits;
-extern crate pbkdf2;
-extern crate protobuf;
-extern crate rand;
-extern crate serde;
-extern crate serde_json;
-extern crate sha1;
-extern crate shannon;
-extern crate tokio_codec;
-extern crate tokio_core;
-extern crate tokio_io;
-extern crate url;
-extern crate uuid;
-
-extern crate librespot_protocol as protocol;
+use librespot_protocol as protocol;
 
 #[macro_use]
 mod component;

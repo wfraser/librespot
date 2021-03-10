@@ -1,3 +1,5 @@
+#![deny(rust_2018_idioms)]
+
 use futures::sync::mpsc::UnboundedReceiver;
 use futures::{Async, Future, Poll, Stream};
 use log::{error, info, trace, warn};
@@ -225,13 +227,7 @@ fn setup(args: &[String]) -> Setup {
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {
-            writeln!(
-                stderr(),
-                "error: {}\n{}",
-                f.to_string(),
-                usage(&args[0], &opts)
-            )
-            .unwrap();
+            eprintln!("error: {}\n{}", f.to_string(), usage(&args[0], &opts));
             exit(1);
         }
     };
@@ -272,8 +268,10 @@ fn setup(args: &[String]) -> Setup {
     let mixer_config = MixerConfig {
         card: matches
             .opt_str("mixer-card")
-            .unwrap_or(String::from("default")),
-        mixer: matches.opt_str("mixer-name").unwrap_or(String::from("PCM")),
+            .unwrap_or_else(|| String::from("default")),
+        mixer: matches
+            .opt_str("mixer-name")
+            .unwrap_or_else(|| String::from("PCM")),
         index: matches
             .opt_str("mixer-index")
             .map(|index| index.parse::<u32>().unwrap())
@@ -297,7 +295,7 @@ fn setup(args: &[String]) -> Setup {
                 .map(|p| AsRef::<Path>::as_ref(p).join("files"));
             system_dir = matches
                 .opt_str("system-cache")
-                .or_else(|| cache_dir)
+                .or(cache_dir)
                 .map(|p| p.into());
         }
 
@@ -327,13 +325,13 @@ fn setup(args: &[String]) -> Setup {
         .map(|port| port.parse::<u16>().unwrap())
         .unwrap_or(0);
 
-    let name = matches.opt_str("name").unwrap_or("Librespot".to_string());
+    let name = matches.opt_str("name").unwrap_or_else(|| "Librespot".to_string());
 
     let credentials = {
         let cached_credentials = cache.as_ref().and_then(Cache::credentials);
 
         let password = |username: &String| -> String {
-            write!(stderr(), "Password for {}: ", username).unwrap();
+            eprint!("Password for {}: ", username);
             stderr().flush().unwrap();
             rpassword::read_password().unwrap()
         };
@@ -351,8 +349,8 @@ fn setup(args: &[String]) -> Setup {
 
         SessionConfig {
             user_agent: version::VERSION_STRING.to_string(),
-            device_id: device_id,
-            proxy: matches.opt_str("proxy").or(std::env::var("http_proxy").ok()).map(
+            device_id,
+            proxy: matches.opt_str("proxy").or_else(|| std::env::var("http_proxy").ok()).map(
                 |s| {
                     match Url::parse(&s) {
                         Ok(url) => {
@@ -382,16 +380,16 @@ fn setup(args: &[String]) -> Setup {
             .opt_str("b")
             .as_ref()
             .map(|bitrate| Bitrate::from_str(bitrate).expect("Invalid bitrate"))
-            .unwrap_or(Bitrate::default());
+            .unwrap_or_default();
         let gain_type = matches
             .opt_str("normalisation-gain-type")
             .as_ref()
             .map(|gain_type| {
                 NormalisationType::from_str(gain_type).expect("Invalid normalisation type")
             })
-            .unwrap_or(NormalisationType::default());
+            .unwrap_or_default();
         PlayerConfig {
-            bitrate: bitrate,
+            bitrate,
             gapless: !matches.opt_present("disable-gapless"),
             normalisation: matches.opt_present("enable-volume-normalisation"),
             normalisation_type: gain_type,
@@ -408,19 +406,19 @@ fn setup(args: &[String]) -> Setup {
             .opt_str("device-type")
             .as_ref()
             .map(|device_type| DeviceType::from_str(device_type).expect("Invalid device type"))
-            .unwrap_or(DeviceType::default());
+            .unwrap_or_default();
 
         let volume_ctrl = matches
             .opt_str("volume-ctrl")
             .as_ref()
             .map(|volume_ctrl| VolumeCtrl::from_str(volume_ctrl).expect("Invalid volume ctrl type"))
-            .unwrap_or(VolumeCtrl::default());
+            .unwrap_or_default();
 
         ConnectConfig {
-            name: name,
-            device_type: device_type,
+            name,
+            device_type,
             volume: initial_volume,
-            volume_ctrl: volume_ctrl,
+            volume_ctrl,
             autoplay: matches.opt_present("autoplay"),
         }
     };
@@ -428,17 +426,17 @@ fn setup(args: &[String]) -> Setup {
     let enable_discovery = !matches.opt_present("disable-discovery");
 
     Setup {
-        backend: backend,
-        cache: cache,
-        session_config: session_config,
-        player_config: player_config,
-        connect_config: connect_config,
-        credentials: credentials,
-        device: device,
-        enable_discovery: enable_discovery,
-        zeroconf_port: zeroconf_port,
-        mixer: mixer,
-        mixer_config: mixer_config,
+        backend,
+        cache,
+        session_config,
+        player_config,
+        connect_config,
+        credentials,
+        device,
+        enable_discovery,
+        zeroconf_port,
+        mixer,
+        mixer_config,
         player_event_program: matches.opt_str("onevent"),
         emit_sink_events: matches.opt_present("emit-sink-events"),
     }

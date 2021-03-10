@@ -2,7 +2,6 @@ use std::io;
 use std::str::FromStr;
 
 use futures::{Async, Future, Poll};
-use httparse;
 use hyper::Uri;
 use tokio_io::io::{read, write_all, Read, Window, WriteAll};
 use tokio_io::{AsyncRead, AsyncWrite};
@@ -101,8 +100,8 @@ fn proxy_connect<T: AsyncWrite>(connection: T, connect_url: &str) -> WriteAll<T,
     let buffer = format!(
         "CONNECT {0}:{1} HTTP/1.1\r\n\
          \r\n",
-        uri.host().expect(&format!("No host in {}", uri)),
-        uri.port().expect(&format!("No port in {}", uri))
+        uri.host().unwrap_or_else(|| panic!("No host in {}", uri)),
+        uri.port().unwrap_or_else(|| panic!("No port in {}", uri))
     )
     .into_bytes();
 

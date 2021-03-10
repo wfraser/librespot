@@ -18,9 +18,9 @@ impl From<&str> for SpotifyAudioType {
     }
 }
 
-impl Into<&str> for SpotifyAudioType {
-    fn into(self) -> &'static str {
-        match self {
+impl From<SpotifyAudioType> for &str {
+    fn from(t: SpotifyAudioType) -> &'static str {
+        match t {
             SpotifyAudioType::Track => "track",
             SpotifyAudioType::Podcast => "episode",
             SpotifyAudioType::NonPlayable => "unknown",
@@ -45,7 +45,7 @@ impl SpotifyId {
     const SIZE_BASE16: usize = 32;
     const SIZE_BASE62: usize = 22;
 
-    fn as_track(n: u128) -> SpotifyId {
+    fn from_track_id(n: u128) -> SpotifyId {
         SpotifyId {
             id: n,
             audio_type: SpotifyAudioType::Track,
@@ -71,7 +71,7 @@ impl SpotifyId {
             dst += p;
         }
 
-        Ok(SpotifyId::as_track(dst))
+        Ok(SpotifyId::from_track_id(dst))
     }
 
     /// Parses a base62 encoded [Spotify ID] into a `SpotifyId`.
@@ -94,7 +94,7 @@ impl SpotifyId {
             dst += p;
         }
 
-        Ok(SpotifyId::as_track(dst))
+        Ok(SpotifyId::from_track_id(dst))
     }
 
     /// Creates a `SpotifyId` from a copy of `SpotifyId::SIZE` (16) bytes in big-endian order.
@@ -102,7 +102,7 @@ impl SpotifyId {
     /// The resulting `SpotifyId` will default to a `SpotifyAudioType::TRACK`.
     pub fn from_raw(src: &[u8]) -> Result<SpotifyId, SpotifyIdError> {
         match src.try_into() {
-            Ok(dst) => Ok(SpotifyId::as_track(u128::from_be_bytes(dst))),
+            Ok(dst) => Ok(SpotifyId::from_track_id(u128::from_be_bytes(dst))),
             Err(_) => Err(SpotifyIdError),
         }
     }
@@ -221,13 +221,13 @@ impl FileId {
 }
 
 impl fmt::Debug for FileId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("FileId").field(&self.to_base16()).finish()
     }
 }
 
 impl fmt::Display for FileId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.to_base16())
     }
 }

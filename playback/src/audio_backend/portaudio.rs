@@ -1,6 +1,5 @@
 use super::{Open, Sink};
 use crate::audio::AudioPacket;
-use portaudio_rs;
 use portaudio_rs::device::{get_default_output_index, DeviceIndex, DeviceInfo};
 use portaudio_rs::stream::*;
 use std::io;

@@ -1,7 +1,5 @@
 #[cfg(feature = "with-tremor")]
-extern crate librespot_tremor as vorbis;
-#[cfg(not(feature = "with-tremor"))]
-extern crate vorbis;
+use librespot_tremor as vorbis;
 
 use super::{AudioDecoder, AudioError, AudioPacket};
 use std::error;
@@ -56,13 +54,13 @@ impl From<vorbis::VorbisError> for VorbisError {
 }
 
 impl fmt::Debug for VorbisError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)
     }
 }
 
 impl fmt::Display for VorbisError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.0, f)
     }
 }

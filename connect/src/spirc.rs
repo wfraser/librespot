@@ -1,13 +1,10 @@
-use std;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use futures::future;
 use futures::sync::mpsc;
 use futures::{Async, Future, Poll, Sink, Stream};
 use protobuf::{self, Message};
-use rand;
 use rand::seq::SliceRandom;
-use serde_json;
 
 use crate::context::StationContext;
 use crate::playback::mixer::Mixer;
@@ -219,12 +216,13 @@ fn calc_logarithmic_volume(volume: u16) -> u16 {
     const IDEAL_FACTOR: f64 = 6.908;
     let normalized_volume = volume as f64 / std::u16::MAX as f64; // To get a value between 0 and 1
 
-    let mut val = std::u16::MAX;
     // Prevent val > std::u16::MAX due to rounding errors
-    if normalized_volume < 0.999 {
+    let val = if normalized_volume < 0.999 {
         let new_volume = (normalized_volume * IDEAL_FACTOR).exp() / 1000.0;
-        val = (new_volume * std::u16::MAX as f64) as u16;
-    }
+        (new_volume * std::u16::MAX as f64) as u16
+    } else {
+        std::u16::MAX
+    };
 
     debug!("input volume:{} to mixer: {}", volume, val);
 
@@ -284,24 +282,24 @@ impl Spirc {
         let player_events = player.get_player_event_channel();
 
         let mut task = SpircTask {
-            player: player,
-            mixer: mixer,
+            player,
+            mixer,
             config: task_config,
 
             sequence: SeqGenerator::new(1),
 
-            ident: ident,
+            ident,
 
-            device: device,
+            device,
             state: initial_state(),
             play_request_id: None,
             mixer_started: false,
             play_status: SpircPlayStatus::Stopped,
 
-            subscription: subscription,
-            sender: sender,
+            subscription,
+            sender,
             commands: cmd_rx,
-            player_events: player_events,
+            player_events,
 
             shutdown: false,
             session: session.clone(),
@@ -459,8 +457,7 @@ impl SpircTask {
             Ok(dur) => dur,
             Err(err) => err.duration(),
         };
-        (dur.as_secs() as i64 + self.session.time_delta()) * 1000
-            + (dur.subsec_nanos() / 1000_000) as i64
+        (dur.as_secs() as i64 + self.session.time_delta()) * 1000 + dur.subsec_millis() as i64
     }
 
     fn ensure_mixer_started(&mut self) {
@@ -653,7 +650,7 @@ impl SpircTask {
         );
 
         if frame.get_ident() == self.ident
-            || (frame.get_recipient().len() > 0 && !frame.get_recipient().contains(&self.ident))
+            || (!frame.get_recipient().is_empty() && !frame.get_recipient().contains(&self.ident))
         {
             return;
         }
@@ -672,7 +669,7 @@ impl SpircTask {
 
                 self.update_tracks(&frame);
 
-                if self.state.get_track().len() > 0 {
+                if !self.state.get_track().is_empty() {
                     let start_playing =
                         frame.get_state().get_status() == PlayStatus::kPlayStatusPlay;
                     self.load_track(start_playing, frame.get_state().get_position_ms());
@@ -895,7 +892,7 @@ impl SpircTask {
 
     fn preview_next_track(&mut self) -> Option<SpotifyId> {
         self.get_track_id_to_play_from_playlist(self.state.get_playing_track_index() + 1)
-            .and_then(|(track_id, _)| Some(track_id))
+            .map(|(track_id, _)| track_id)
     }
 
     fn handle_preload_next_track(&mut self) {
@@ -1152,7 +1149,7 @@ impl SpircTask {
         }
 
         self.state.set_playing_track_index(index);
-        self.state.set_track(tracks.into_iter().cloned().collect());
+        self.state.set_track(tracks.iter().cloned().collect());
         self.state.set_context_uri(context_uri);
         // has_shuffle/repeat seem to always be true in these replace msgs,
         // but to replicate the behaviour of the Android client we have to
@@ -1314,7 +1311,7 @@ struct CommandSender<'a> {
 }
 
 impl<'a> CommandSender<'a> {
-    fn new(spirc: &'a mut SpircTask, cmd: MessageType) -> CommandSender {
+    fn new(spirc: &'a mut SpircTask, cmd: MessageType) -> CommandSender<'_> {
         let mut frame = protocol::spirc::Frame::new();
         frame.set_version(1);
         frame.set_protocol_version(::std::convert::Into::into("2.0.0"));
@@ -1323,13 +1320,10 @@ impl<'a> CommandSender<'a> {
         frame.set_typ(cmd);
         frame.set_device_state(spirc.device.clone());
         frame.set_state_update_id(spirc.now_ms());
-        CommandSender {
-            spirc: spirc,
-            frame: frame,
-        }
+        CommandSender { spirc, frame }
     }
 
-    fn recipient(mut self, recipient: &'a str) -> CommandSender {
+    fn recipient(mut self, recipient: &'a str) -> CommandSender<'_> {
         self.frame.mut_recipient().push(recipient.to_owned());
         self
     }

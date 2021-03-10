@@ -1,17 +1,9 @@
+#![deny(rust_2018_idioms)]
+
 #[macro_use]
 extern crate futures;
 #[macro_use]
 extern crate log;
-
-extern crate aes_ctr;
-extern crate bit_set;
-extern crate byteorder;
-extern crate bytes;
-extern crate num_bigint;
-extern crate num_traits;
-extern crate tempfile;
-
-extern crate librespot_core;
 
 mod decrypt;
 mod fetch;
@@ -73,7 +65,7 @@ pub enum AudioError {
 }
 
 impl fmt::Display for AudioError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AudioError::PassthroughError(err) => write!(f, "PassthroughError({})", err),
             AudioError::VorbisError(err) => write!(f, "VorbisError({})", err),
@@ -83,13 +75,13 @@ impl fmt::Display for AudioError {
 
 impl From<VorbisError> for AudioError {
     fn from(err: VorbisError) -> AudioError {
-        AudioError::VorbisError(VorbisError::from(err))
+        AudioError::VorbisError(err)
     }
 }
 
 impl From<PassthroughError> for AudioError {
     fn from(err: PassthroughError) -> AudioError {
-        AudioError::PassthroughError(PassthroughError::from(err))
+        AudioError::PassthroughError(err)
     }
 }
 

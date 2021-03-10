@@ -68,11 +68,13 @@ use self::pipe::StdoutSink;
 mod subprocess;
 use self::subprocess::SubprocessSink;
 
-pub const BACKENDS: &'static [(&'static str, fn(Option<String>) -> Box<dyn Sink>)] = &[
+pub type BackendCtor = fn(Option<String>) -> Box<dyn Sink>;
+
+pub const BACKENDS: &[(&str, BackendCtor)] = &[
     #[cfg(feature = "alsa-backend")]
     ("alsa", mk_sink::<AlsaSink>),
     #[cfg(feature = "portaudio-backend")]
-    ("portaudio", mk_sink::<PortAudioSink>),
+    ("portaudio", mk_sink::<PortAudioSink<'_>>),
     #[cfg(feature = "pulseaudio-backend")]
     ("pulseaudio", mk_sink::<PulseAudioSink>),
     #[cfg(feature = "jackaudio-backend")]
@@ -92,7 +94,7 @@ pub const BACKENDS: &'static [(&'static str, fn(Option<String>) -> Box<dyn Sink>
     ("subprocess", mk_sink::<SubprocessSink>),
 ];
 
-pub fn find(name: Option<String>) -> Option<fn(Option<String>) -> Box<dyn Sink>> {
+pub fn find(name: Option<String>) -> Option<BackendCtor> {
     if let Some(name) = name {
         BACKENDS
             .iter()

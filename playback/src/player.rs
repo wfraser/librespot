@@ -1,7 +1,5 @@
 use byteorder::{LittleEndian, ReadBytesExt};
-use futures;
 use futures::{future, Async, Future, Poll, Stream};
-use std;
 use std::borrow::Cow;
 use std::cmp::max;
 use std::io::{Read, Result, Seek, SeekFrom};
@@ -198,16 +196,16 @@ impl NormalisationData {
         file.seek(SeekFrom::Start(SPOTIFY_NORMALIZATION_HEADER_START_OFFSET))
             .unwrap();
 
-        let track_gain_db = file.read_f32::<LittleEndian>().unwrap();
-        let track_peak = file.read_f32::<LittleEndian>().unwrap();
-        let album_gain_db = file.read_f32::<LittleEndian>().unwrap();
-        let album_peak = file.read_f32::<LittleEndian>().unwrap();
+        let track_gain_db = file.read_f32::<LittleEndian>()?;
+        let track_peak = file.read_f32::<LittleEndian>()?;
+        let album_gain_db = file.read_f32::<LittleEndian>()?;
+        let album_peak = file.read_f32::<LittleEndian>()?;
 
         let r = NormalisationData {
-            track_gain_db: track_gain_db,
-            track_peak: track_peak,
-            album_gain_db: album_gain_db,
-            album_peak: album_peak,
+            track_gain_db,
+            track_peak,
+            album_gain_db,
+            album_peak,
         };
 
         Ok(r)
@@ -251,8 +249,8 @@ impl Player {
             debug!("new Player[{}]", session.session_id());
 
             let internal = PlayerInternal {
-                session: session,
-                config: config,
+                session,
+                config,
                 commands: cmd_rx,
 
                 state: PlayerState::Stopped,
@@ -260,7 +258,7 @@ impl Player {
                 sink: sink_builder(),
                 sink_status: SinkStatus::Closed,
                 sink_event_callback: None,
-                audio_filter: audio_filter,
+                audio_filter,
                 event_senders: [event_sender].to_vec(),
             };
 
@@ -325,10 +323,8 @@ impl Player {
     pub fn get_end_of_track_future(&self) -> Box<dyn Future<Item = (), Error = ()>> {
         let result = self
             .get_player_event_channel()
-            .filter(|event| match event {
-                PlayerEvent::EndOfTrack { .. } | PlayerEvent::Stopped { .. } => true,
-                _ => false,
-            })
+            .filter(|event|
+                matches!(event, PlayerEvent::EndOfTrack { .. } | PlayerEvent::Stopped { .. }))
             .into_future()
             .map_err(|_| ())
             .map(|_| ());
@@ -431,19 +427,11 @@ impl PlayerState {
 
     #[allow(dead_code)]
     fn is_stopped(&self) -> bool {
-        use self::PlayerState::*;
-        match *self {
-            Stopped => true,
-            _ => false,
-        }
+        matches!(self, PlayerState::Stopped)
     }
 
     fn is_loading(&self) -> bool {
-        use self::PlayerState::*;
-        match *self {
-            Loading { .. } => true,
-            _ => false,
-        }
+        matches!(self, PlayerState::Loading { .. })
     }
 
     fn decoder(&mut self) -> Option<&mut Decoder> {
@@ -579,19 +567,17 @@ impl PlayerTrackLoader {
     fn find_available_alternative<'a>(&self, audio: &'a AudioItem) -> Option<Cow<'a, AudioItem>> {
         if audio.available {
             Some(Cow::Borrowed(audio))
+        } else if let Some(alternatives) = &audio.alternatives {
+            let alternatives = alternatives
+                .iter()
+                .map(|alt_id| AudioItem::get_audio_item(&self.session, *alt_id));
+            let alternatives = future::join_all(alternatives).wait().unwrap();
+            alternatives
+                .into_iter()
+                .find(|alt| alt.available)
+                .map(Cow::Owned)
         } else {
-            if let Some(alternatives) = &audio.alternatives {
-                let alternatives = alternatives
-                    .iter()
-                    .map(|alt_id| AudioItem::get_audio_item(&self.session, *alt_id));
-                let alternatives = future::join_all(alternatives).wait().unwrap();
-                alternatives
-                    .into_iter()
-                    .find(|alt| alt.available)
-                    .map(Cow::Owned)
-            } else {
-                None
-            }
+            None
         }
     }
 
@@ -717,7 +703,7 @@ impl PlayerTrackLoader {
             }
             Err(_) => {
                 warn!("Unable to extract normalisation data, using default value.");
-                1.0 as f32
+                1.0_f32
             }
         };
 
@@ -887,8 +873,7 @@ impl Future for PlayerInternal {
 
                     if !self.config.passthrough {
                         if let Some(ref packet) = packet {
-                            *stream_position_pcm =
-                                *stream_position_pcm + (packet.samples().len() / 2) as u64;
+                            *stream_position_pcm += (packet.samples().len() / 2) as u64;
                             let stream_position_millis =
                                 Self::position_pcm_to_ms(*stream_position_pcm);
 
@@ -900,11 +885,8 @@ impl Future for PlayerInternal {
                                         .as_millis()
                                         as i64
                                         - stream_position_millis as i64;
-                                    if lag > 1000 {
-                                        true
-                                    } else {
-                                        false
-                                    }
+
+                                    lag > 1000
                                 }
                             };
                             if notify_about_position {
@@ -1104,6 +1086,7 @@ impl PlayerInternal {
         }
     }
 
+    #[allow(clippy::float_cmp)]
     fn handle_packet(&mut self, packet: Option<AudioPacket>, normalisation_factor: f32) {
         match packet {
             Some(mut packet) => {
@@ -1166,8 +1149,8 @@ impl PlayerInternal {
             });
 
             self.state = PlayerState::Playing {
-                track_id: track_id,
-                play_request_id: play_request_id,
+                track_id,
+                play_request_id,
                 decoder: loaded_track.decoder,
                 normalisation_factor: loaded_track.normalisation_factor,
                 stream_loader_controller: loaded_track.stream_loader_controller,
@@ -1183,8 +1166,8 @@ impl PlayerInternal {
             self.ensure_sink_stopped(false);
 
             self.state = PlayerState::Paused {
-                track_id: track_id,
-                play_request_id: play_request_id,
+                track_id,
+                play_request_id,
                 decoder: loaded_track.decoder,
                 normalisation_factor: loaded_track.normalisation_factor,
                 stream_loader_controller: loaded_track.stream_loader_controller,
@@ -1231,7 +1214,7 @@ impl PlayerInternal {
                 track_id: old_track_id,
                 ..
             } => self.send_event(PlayerEvent::Changed {
-                old_track_id: old_track_id,
+                old_track_id,
                 new_track_id: track_id,
             }),
             PlayerState::Stopped => self.send_event(PlayerEvent::Started {
@@ -1599,12 +1582,9 @@ impl PlayerInternal {
         let (result_tx, result_rx) = futures::sync::oneshot::channel();
 
         std::thread::spawn(move || {
-            loader
-                .load_track(spotify_id, position_ms)
-                .and_then(move |data| {
-                    let _ = result_tx.send(data);
-                    Some(())
-                });
+            if let Some(data) = loader.load_track(spotify_id, position_ms) {
+                let _ = result_tx.send(data);
+            };
         });
 
         Box::new(result_rx.map_err(|_| ()))
@@ -1645,7 +1625,7 @@ impl Drop for PlayerInternal {
 }
 
 impl ::std::fmt::Debug for PlayerCommand {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match *self {
             PlayerCommand::Load {
                 track_id,
@@ -1729,10 +1709,7 @@ struct Subfile<T: Read + Seek> {
 impl<T: Read + Seek> Subfile<T> {
     pub fn new(mut stream: T, offset: u64) -> Subfile<T> {
         stream.seek(SeekFrom::Start(offset)).unwrap();
-        Subfile {
-            stream: stream,
-            offset: offset,
-        }
+        Subfile { stream, offset }
     }
 }
 

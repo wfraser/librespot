@@ -27,7 +27,7 @@ fn write_headers<T: Read + Seek>(
 
     // remove un-needed packets
     rdr.delete_unread_packets();
-    return Ok(stream_serial);
+    Ok(stream_serial)
 }
 
 fn get_header<T>(
@@ -65,7 +65,7 @@ where
     )
     .unwrap();
 
-    return Ok(*stream_serial);
+    Ok(*stream_serial)
 }
 
 pub struct PassthroughDecoder<R: Read + Seek> {
@@ -87,13 +87,13 @@ impl<R: Read + Seek> PassthroughDecoder<R> {
         let stream_serial = write_headers(&mut rdr, &mut wtr)?;
         info!("Starting passthrough track with serial {}", stream_serial);
 
-        return Ok(PassthroughDecoder {
+        Ok(PassthroughDecoder {
             rdr,
             wtr,
             lastgp_page: Some(0),
             absgp_page: 0,
             stream_serial,
-        });
+        })
     }
 }
 
@@ -107,8 +107,8 @@ impl<R: Read + Seek> AudioDecoder for PassthroughDecoder<R> {
 
         // hard-coded to 44.1 kHz
         match self.rdr.seek_absgp(None, (ms * 44100 / 1000) as u64) {
-            Ok(_) => return Ok(()),
-            Err(err) => return Err(AudioError::PassthroughError(err.into())),
+            Ok(_) => Ok(()),
+            Err(err) => Err(AudioError::PassthroughError(err.into())),
         }
     }
 
@@ -164,7 +164,7 @@ impl<R: Read + Seek> AudioDecoder for PassthroughDecoder<R> {
 
             let data = self.wtr.inner_mut();
 
-            if data.len() > 0 {
+            if !data.is_empty() {
                 let result = AudioPacket::OggData(std::mem::take(data));
                 return Ok(Some(result));
             }
@@ -173,7 +173,7 @@ impl<R: Read + Seek> AudioDecoder for PassthroughDecoder<R> {
 }
 
 impl fmt::Debug for PassthroughError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)
     }
 }
@@ -185,7 +185,7 @@ impl From<ogg::OggReadError> for PassthroughError {
 }
 
 impl fmt::Display for PassthroughError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.0, f)
     }
 }

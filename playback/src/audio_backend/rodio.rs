@@ -1,6 +1,4 @@
 use super::{Open, Sink};
-extern crate cpal;
-extern crate rodio;
 use crate::audio::AudioPacket;
 use cpal::traits::{DeviceTrait, HostTrait};
 use std::process::exit;
@@ -24,9 +22,9 @@ pub struct JackRodioSink {
     stream: rodio::OutputStream,
 }
 
-fn list_formats(ref device: &rodio::Device) {
+fn list_formats(device: &rodio::Device) {
     let default_fmt = match device.default_output_config() {
-        Ok(fmt) => cpal::SupportedStreamConfig::from(fmt),
+        Ok(fmt) => fmt,
         Err(e) => {
             warn!("Error getting default rodio::Sink config: {}", e);
             return;
@@ -51,7 +49,7 @@ fn list_formats(ref device: &rodio::Device) {
     }
 }
 
-fn list_outputs(ref host: &cpal::Host) {
+fn list_outputs(host: &cpal::Host) {
     let default_device = get_default_device(host);
     let default_device_name = default_device.name().expect("cannot get output name");
     println!("Default Audio Device:\n  {}", default_device_name);
@@ -59,9 +57,10 @@ fn list_outputs(ref host: &cpal::Host) {
 
     println!("Other Available Audio Devices:");
 
-    let found_devices = host.output_devices().expect(&format!(
-        "Cannot get list of output devices of Host: {:?}",
-        host.id()
+    let found_devices = host.output_devices().unwrap_or_else(|e| panic!(
+        "Cannot get list of output devices of Host {:?}: {}",
+        host.id(),
+        e
     ));
     for device in found_devices {
         let device_name = device.name().expect("cannot get output name");
@@ -72,22 +71,23 @@ fn list_outputs(ref host: &cpal::Host) {
     }
 }
 
-fn get_default_device(ref host: &cpal::Host) -> rodio::Device {
+fn get_default_device(host: &cpal::Host) -> rodio::Device {
     host.default_output_device()
         .expect("no default output device available")
 }
 
-fn match_device(ref host: &cpal::Host, device: Option<String>) -> rodio::Device {
+fn match_device(host: &cpal::Host, device: Option<String>) -> rodio::Device {
     match device {
         Some(device_name) => {
-            if device_name == "?".to_string() {
+            if device_name == "?" {
                 list_outputs(host);
                 exit(0)
             }
 
-            let found_devices = host.output_devices().expect(&format!(
-                "Cannot get list of output devices of Host: {:?}",
-                host.id()
+            let found_devices = host.output_devices().unwrap_or_else(|e| panic!(
+                "Cannot get list of output devices of Host {:?}: {}",
+                host.id(),
+                e
             ));
             for d in found_devices {
                 if d.name().expect("cannot get output name") == device_name {
@@ -97,7 +97,7 @@ fn match_device(ref host: &cpal::Host, device: Option<String>) -> rodio::Device 
             println!("No output sink matching '{}' found.", device_name);
             exit(0)
         }
-        None => return get_default_device(host),
+        None => get_default_device(host),
     }
 }
 
